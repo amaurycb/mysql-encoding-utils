@@ -1,45 +1,91 @@
-import mysql.connector
+import pymysql
+import concurrent.futures
 
-def change_table_encoding_and_collation(database_name, user, password, host='localhost', port=3306):
+# Configuración de la conexión a la base de datos
+db_config = {
+    'host': 'host',
+    'user': 'usuario',
+    'password': 'password',
+    'database': 'basedatos',
+    'charset': 'utf8mb4'
+}
+
+# Lista de reemplazos de caracteres erróneos y sus correcciones
+replacements = [
+    ('Ã±', 'ñ'), ('Ã¡', 'á'), ('Ã©', 'é'), ('Ã­', 'í'), ('Ã³', 'ó'), ('Ãº', 'ú'),
+    ('Ã', 'Á'), ('Ã‰', 'É'), ('Ã', 'Í'), ('Ã“', 'Ó'), ('Ãš', 'Ú'), ('Ã‘', 'Ñ'),
+    ('Ã¼', 'ü'), ('Ã§', 'ç'), ('Â¿', '¿'), ('Â¡', '¡'), ('Ã…Â½', 'é'),
+    ('Ã¢â‚¬¡', 'á'), ('Ã¢â‚¬â€œ', 'ñ'), ('Ã…¡', 'Á'), ('Ãƒ¡', 'á'),
+    ('ÃƒÂ©', 'é'), ('ÃƒÂ±', 'ñ'), ('ÃƒÂ³', 'ó'), ('ÃƒÂ­', 'í'), ('ÃƒÂº', 'ú'),
+    ('Ãƒâ€˜', 'Ñ')
+]
+
+# Variable para controlar la cantidad de hilos
+num_threads = 5  # Puedes cambiar este valor para controlar la cantidad de hilos
+
+def procesar_columna(table_name, column_name, db_config):
+    # Crear una nueva conexión dentro del hilo
+    connection = pymysql.connect(**db_config)
+
     try:
-        # Conectar a la base de datos
-        connection = mysql.connector.connect(
-            host=host,
-            port=port,
-            user=user,
-            password=password,
-            database=database_name
-        )
-        cursor = connection.cursor()
-
-        # Obtener todas las tablas del esquema
-        cursor.execute(f"SHOW TABLES FROM {database_name};")
-        tables = cursor.fetchall()
-
-        # Iterar sobre cada tabla y cambiar la codificación y collation
-        for table in tables:
-            table_name = table[0]
-            alter_query = f"ALTER TABLE {table_name} CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-            print(f"Ejecutando: {alter_query}")
-            cursor.execute(alter_query)
+        with connection.cursor() as cursor:
+            # Escapar nombres de tablas y columnas con comillas invertidas
+            escaped_table_name = "`{}`".format(table_name)
+            escaped_column_name = "`{}`".format(column_name)
+            
+            # Construir el cuerpo de los reemplazos en la consulta
+            replace_expression = escaped_column_name
+            for old_value, new_value in replacements:
+                replace_expression = "REPLACE({}, '{}', '{}')".format(replace_expression, old_value, new_value)
+            
+            # Construir la consulta final de actualización con WHERE
+            final_query = """
+                UPDATE {table} 
+                SET {column} = {replace_expr}
+                WHERE {column} REGEXP 'Ã±|Ã¡|Ã©|Ã­|Ã³|Ãº|Ã|Ã‰|Ã|Ã“|Ãš|Ã‘|Ã¼|Ã§|Â¿|Â¡|Ã…Â½|Ã¢â‚¬¡|Ã¢â‚¬â€œ|Ã…¡|Ãƒ¡|ÃƒÂ©|ÃƒÂ±|ÃƒÂ³|ÃƒÂº|ÃƒÂ­';
+            """.format(table=escaped_table_name, column=escaped_column_name, replace_expr=replace_expression)
+            
+            # Ejecutar la consulta de actualización
+            print("Ejecutando: {}".format(final_query))
+            cursor.execute(final_query)
             connection.commit()
-
-        print(f"Se ha cambiado la codificación y collation de todas las tablas en la base de datos '{database_name}'.")
-
-    except mysql.connector.Error as error:
-        print(f"Error: {error}")
+    except Exception as e:
+        print("Error en {}.{}: {}".format(table_name, column_name, e))
     finally:
-        if connection.is_connected():
-            cursor.close()
-            connection.close()
-            print("Conexión cerrada.")
+        connection.close()
+
+
+def main(db_config, num_threads):
+    try:
+        # Crear una conexión principal para obtener las tablas y columnas
+        connection = pymysql.connect(**db_config)
+        
+        with connection.cursor() as cursor:
+            # Obtener todas las tablas y columnas de tipo texto
+            cursor.execute("""
+                SELECT table_name, column_name 
+                FROM information_schema.columns 
+                WHERE table_schema = DATABASE() 
+                AND data_type IN ('varchar', 'text', 'char');
+            """)
+            
+            tables_columns = cursor.fetchall()
+        
+        # Ejecutar concurrentemente utilizando hilos
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+            # Ejecutar cada columna en un hilo separado
+            futures = [executor.submit(procesar_columna, table_name, column_name, db_config) for table_name, column_name in tables_columns]
+
+            # Aguardar a que todos los hilos finalicen
+            for future in concurrent.futures.as_completed(futures):
+                future.result()
+
+    except Exception as e:
+        print("Error: {}".format(e))
+    finally:
+        connection.close()
+
 
 if __name__ == "__main__":
-    # Parámetros de conexión a la base de datos
-    db_name = 'nombre_de_la_base_de_datos'
-    db_user = 'usuario'
-    db_password = 'password'
-    db_host = 'localhost'  
-    db_port = 3306  # Cambia el puerto si es necesario
-
-    change_table_encoding_and_collation(db_name, db_user, db_password, db_host, db_port)
+    # Ejecutar el script con la configuración de la base de datos y el número de hilos
+    main(db_config, num_threads)
