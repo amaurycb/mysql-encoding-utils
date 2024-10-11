@@ -40,14 +40,17 @@ def procesar_columna(table_name, column_name, db_config):
             
             # Construir la consulta final de actualización con WHERE
             final_query = """
-                UPDATE {table} 
-                SET {column} = {replace_expr}
-                WHERE {column} REGEXP 'Ã±|Ã¡|Ã©|Ã­|Ã³|Ãº|Ã|Ã‰|Ã|Ã“|Ãš|Ã‘|Ã¼|Ã§|Â¿|Â¡|Ã…Â½|Ã¢â‚¬¡|Ã¢â‚¬â€œ|Ã…¡|Ãƒ¡|ÃƒÂ©|ÃƒÂ±|ÃƒÂ³|ÃƒÂº|ÃƒÂ­';
-            """.format(table=escaped_table_name, column=escaped_column_name, replace_expr=replace_expression)
+                UPDATE {table}
+                SET {column} = 
+                replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace({column},'Ã±','ñ'),'Ã¡','á'),'Ã©','é'),'Ã­','í'),'Ã³','ó'),'Ãº','ú'),'Ã','Á'),'Ã‰','É'),'Ã','Í'),'Ã“','Ó'),'Ãš','Ú'),'Ã‘','Ñ'),'Ã¼','ü'),'Ã§','ç'),'Â¿','¿'),'Â¡','¡'),'Ã…Â½','é'),'Ã¢â‚¬¡','á'),'Ã¢â‚¬â€œ','ñ'),'Ã…¡','Á'),'Ãƒ¡','á'),'ÃƒÂ©','é'),'ÃƒÂ±','ñ'),'ÃƒÂ³','ó'),'ÃƒÂ­','í'),'ÃƒÂº','ú'),'Ãƒâ€˜','Ñ')
+                WHERE regexp_like({column}, 'Ã±|Ã¡|Ã©|Ã­|Ã³|Ãº|Ã|Ã‰|Ã|Ã“|Ãš|Ã‘|Ã¼|Ã§|Â¿|Â¡|Ã…Â½|Ã¢â‚¬¡|Ã¢â‚¬â€œ|Ã…¡|Ãƒ¡|ÃƒÂ©|ÃƒÂ±|ÃƒÂ³|ÃƒÂº|ÃƒÂ­');
+            """.format(table=escaped_table_name, column=escaped_column_name)
+
+
             
             # Ejecutar la consulta de actualización
             print("Ejecutando: {}".format(final_query))
-            cursor.execute(final_query)
+            #cursor.execute(final_query)
             connection.commit()
     except Exception as e:
         print("Error en {}.{}: {}".format(table_name, column_name, e))
