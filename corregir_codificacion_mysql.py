@@ -22,7 +22,7 @@ replacements = [
 ]
 
 # Variable para controlar la cantidad de hilos
-num_threads = 5  # Puedes cambiar este valor para controlar la cantidad de hilos
+num_threads = 3  # Puedes cambiar este valor para controlar la cantidad de hilos
 
 def procesar_columna(table_name, column_name, db_config):
     # Crear una nueva conexión dentro del hilo
@@ -59,21 +59,33 @@ def procesar_columna(table_name, column_name, db_config):
         connection.close()
 
 
-def main(db_config, num_threads):
+def main(db_config, num_threads, table_names=None):
     try:
         # Crear una conexión principal para obtener las tablas y columnas
         connection = pymysql.connect(**db_config)
-        
+                
         with connection.cursor() as cursor:
-            # Obtener todas las tablas y columnas de tipo texto
-            cursor.execute("""
-                SELECT table_name, column_name 
-                FROM information_schema.columns 
-                WHERE table_schema = DATABASE() 
-                AND data_type IN ('varchar', 'text', 'char');
-            """)
-            
+            if table_names:
+                # Construir una cláusula WHERE para filtrar las tablas
+                table_names_str = ', '.join(['"{}"'.format(name) for name in table_names])
+                query = """
+                    SELECT table_name, column_name 
+                    FROM information_schema.columns 
+                    WHERE table_schema = DATABASE() 
+                    AND data_type IN ('varchar', 'text', 'char')
+                    AND table_name IN ({})
+                """.format(table_names_str)
+            else:
+                # Obtener todas las tablas y columnas de tipo texto
+                query = """
+                    SELECT table_name, column_name 
+                    FROM information_schema.columns 
+                    WHERE table_schema = DATABASE() 
+                    AND data_type IN ('varchar', 'text', 'char');
+                """
+            cursor.execute(query)
             tables_columns = cursor.fetchall()
+            
         
         # Ejecutar concurrentemente utilizando hilos
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
@@ -91,5 +103,8 @@ def main(db_config, num_threads):
 
 
 if __name__ == "__main__":
-    # Ejecutar el script con la configuración de la base de datos y el número de hilos
-    main(db_config, num_threads)
+    # Lista de tablas a procesar (o dejar vacío para procesar todas)
+    tablas_a_procesar = [] 
+    # Ejecutar el script con la configuración de la base de datos, 
+    # el número de hilos y la lista de tablas
+    main(db_config, num_threads, tablas_a_procesar)
