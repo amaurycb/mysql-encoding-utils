@@ -59,7 +59,10 @@ def procesar_columna(table_name, column_name, db_config):
         connection.close()
 
 
-def main(db_config, num_threads, table_names=None):
+def main(db_config, num_threads, table_names=None, exclude_tables=None):
+    if table_names and exclude_tables:
+        raise ValueError("No puedes especificar table_names y exclude_tables al mismo tiempo.")
+    
     try:
         # Crear una conexión principal para obtener las tablas y columnas
         connection = pymysql.connect(**db_config)
@@ -75,6 +78,16 @@ def main(db_config, num_threads, table_names=None):
                     AND data_type IN ('varchar', 'text', 'char', 'mediumtext')
                     AND table_name IN ({})
                 """.format(table_names_str)
+            elif exclude_tables:
+                # Construir una cláusula WHERE para excluir las tablas
+                exclude_tables_str = ', '.join(['"{}"'.format(name) for name in exclude_tables])
+                query = """
+                    SELECT table_name, column_name 
+                    FROM information_schema.columns 
+                    WHERE table_schema = DATABASE() 
+                    AND data_type IN ('varchar', 'text', 'char', 'mediumtext')
+                    AND table_name NOT IN ({})
+                """.format(exclude_tables_str)    
             else:
                 # Obtener todas las tablas y columnas de tipo texto
                 query = """
@@ -104,7 +117,11 @@ def main(db_config, num_threads, table_names=None):
 
 if __name__ == "__main__":
     # Lista de tablas a procesar (o dejar vacío para procesar todas)
-    tablas_a_procesar = [] 
+    tablas_a_procesar = []
+
+    # Lista de tablas a excluir (o dejar vacío para no excluir ninguna)
+    tablas_a_excluir = ["tabla1", "tabla2"] 
+      
     # Ejecutar el script con la configuración de la base de datos, 
     # el número de hilos y la lista de tablas
     main(db_config, num_threads, tablas_a_procesar)
