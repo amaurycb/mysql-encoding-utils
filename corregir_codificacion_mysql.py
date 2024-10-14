@@ -72,7 +72,7 @@ def main(db_config, num_threads, table_names=None):
                     SELECT table_name, column_name 
                     FROM information_schema.columns 
                     WHERE table_schema = DATABASE() 
-                    AND data_type IN ('varchar', 'text', 'char')
+                    AND data_type IN ('varchar', 'text', 'char', 'mediumtext')
                     AND table_name IN ({})
                 """.format(table_names_str)
             else:
@@ -81,7 +81,7 @@ def main(db_config, num_threads, table_names=None):
                     SELECT table_name, column_name 
                     FROM information_schema.columns 
                     WHERE table_schema = DATABASE() 
-                    AND data_type IN ('varchar', 'text', 'char');
+                    AND data_type IN ('varchar', 'text', 'char', 'mediumtext');
                 """
             cursor.execute(query)
             tables_columns = cursor.fetchall()
